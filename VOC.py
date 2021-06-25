@@ -39,14 +39,9 @@ def prepare(ds):
     ds = ds.map(lambda image, gts : (image, match(anchor_bboxes, gts)),
                 num_parallel_calls=tf.data.AUTOTUNE)
 
+    print(ds)
+
     return ds
-
-
-'''TODO:
-    1. check where to add the 'bgd' class - might be in the match function
-    
-'''
-
 
 def decode(elem):
     ''' to decode an element from voc dataset provided by tfds
@@ -104,8 +99,8 @@ def cal_iou(d_bboxes, g_bboxes):
     min_max = tf.math.maximum(g_bboxes[:, :, :2], d_bboxes[:, :, :2])
 
     mul = (max_min - min_max)
-    mul = mul * tf.where(mul > 0, x=tf.ones_like(mul, dtype=tf.float32),
-                    y=tf.zeros_like(mul, dtype=tf.float32))
+    mul = tf.where(mul>0, x=mul, y=tf.zeros_like(mul, dtype=tf.float32))
+
     inter = mul[:, :, 0] * mul[:, :, 1]
 
     union = (g_bboxes[:, :, 2] - g_bboxes[:, :, 0]) * (g_bboxes[:, :, 3] - g_bboxes[:, :, 1]) + \
@@ -154,9 +149,8 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     n_anchors = tf.shape(anchor_bboxes)[0]
     enlarged_gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1) # [n_objs, 4] -> [n_objs, n_anchors, 4]
 
-    # enlarged_anchor_bboxes = tf.ones_like(enlarged_gt_bboxes)
     n_objs = tf.shape(gt_bboxes)[0]
-    enlarged_anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 1), n_objs, 0) # [n_anchors, 4] -> [n_objs, n_anchors, 4]
+    enlarged_anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 0), n_objs, 0) # [n_anchors, 4] -> [n_objs, n_anchors, 4]
 
     ious = cal_iou(enlarged_anchor_bboxes, enlarged_gt_bboxes) # [n_objs, n_anchors, 1]
 
@@ -166,20 +160,25 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     # anchor-wise
     max_iou_gt_idxs = tf.math.argmax(ious, axis=0)
     max_iou_gt = tf.math.reduce_max(ious, axis=0)
-    target_labels = tf.gather(gt_labels, max_iou_gt_idxs)
+    target_labels = tf.gather(gt_labels, max_iou_gt_idxs, axis=0)
     target_labels = tf.expand_dims(tf.where(max_iou_gt > 0.5,
                     x=target_labels, y=tf.ones_like(target_labels) * num_classes_without_bgd), -1)
-    target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs)
-
-    print(target_labels)
-    print(target_bboxes)
+    target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs, axis=0)
     
     # gt-wise
     gt_idxs = tf.range(0, n_objs, 1, dtype=tf.int64)
+
     max_iou_anchor_idxs = tf.math.argmax(ious, axis=1)
-    for i in range(n_objs):
+    for i in tf.range(n_objs):
+        tf.autograph.experimental.set_loop_options( # otherwise error raised
+            shape_invariants=[
+                (target_bboxes, tf.TensorShape([None, 4])),
+                (target_labels, tf.TensorShape([None, 1]))
+                ]
+        )
+
         val = max_iou_anchor_idxs[i] # which anchor
-        # fot labels
+        # for labels
         label_head = target_labels[:val, :]
         label_mid = tf.reshape(gt_idxs[i], [1, 1])
         label_tail = target_labels[val+1:, :]
@@ -187,15 +186,11 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
 
         # for bboxes
         bbox_head = target_bboxes[:val, :]
-        bbox_mid = tf.expand_dims(gt_bboxes[i], 0)
+        bbox_mid = tf.reshape(gt_bboxes[i], [1, 4])
         bbox_tail = target_bboxes[val+1:, :]
         target_bboxes = tf.concat([bbox_head, bbox_mid, bbox_tail], axis=0)
 
     # up to now, all anchors should have a label and a target bbox
-
-    print(target_labels)
-    print(target_bboxes)
-    print(anchor_bboxes)
 
     # turn the coords to center-size form
     anchor_bboxes = bc2cc(anchor_bboxes)
@@ -203,24 +198,18 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
 
     offsets = cal_offset(anchor_bboxes, target_bboxes)
 
-    print(offsets)
-
     # now we have tow tensors, target_labels and offsets, 
     # the order is the same as the corresponding anchors'
 
-    # one hot 
+    # one hot coding
     target_labels = tf.one_hot(
         tf.squeeze(target_labels), 
         depth=(num_classes_without_bgd+1), 
         axis=-1,
         dtype=tf.float32)   
 
-    print(target_labels)
-
     targets = tf.concat([target_labels, offsets], axis=-1)
 
-    print(targets)
-    
     return targets
 
 '''TODO:
