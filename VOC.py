@@ -1,3 +1,4 @@
+from re import I
 import tensorflow_datasets as tfds
 import tensorflow as tf
 # import numpy as np
@@ -133,7 +134,7 @@ def cal_offset(d_bboxes, g_bboxes):
 
     return tf.stack([c_x_offsets, c_y_offsets, w_offsets, h_offsets], -1)
 
-def match(anchor_bboxes, gts):
+def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     '''map anchors to gts
     args:
         anchor_bbox
@@ -147,10 +148,7 @@ def match(anchor_bboxes, gts):
             target['offset'] is [g_c_x, g_c_y, g_w, g_h]
     '''
     gt_bboxes = gts['bbox']
-    # print(gt_bboxes)
     gt_labels = gts['label']
-    # print(gt_labels)
-    # print(anchor_bboxes)
 
     # broadcast to [n_objs, n_anchors, 4]
     n_anchors = tf.shape(anchor_bboxes)[0]
@@ -164,31 +162,40 @@ def match(anchor_bboxes, gts):
 
     # two rules to do the match depending on ious
     # 1. anchor-wise 2. gt-wise
-    
-    target_labels = tf.zeros(n_anchors, 1) * 20 # the 21th class is background
-    target_bboxes = tf.zeros(n_anchors, 4)
 
     # anchor-wise
     max_iou_gt_idxs = tf.math.argmax(ious, axis=0)
     max_iou_gt = tf.math.reduce_max(ious, axis=0)
     target_labels = tf.gather(gt_labels, max_iou_gt_idxs)
-    target_labels = tf.where(max_iou_gt > 0.5, x=target_labels, y=tf.ones_like(target_labels) * 20)
+    target_labels = tf.expand_dims(tf.where(max_iou_gt > 0.5,
+                    x=target_labels, y=tf.ones_like(target_labels) * num_classes_without_bgd), -1)
     target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs)
+
+    print(target_labels)
+    print(target_bboxes)
     
     # gt-wise
+    gt_idxs = tf.range(0, n_objs, 1, dtype=tf.int64)
     max_iou_anchor_idxs = tf.math.argmax(ious, axis=1)
-    for i, val in enumerate(max_iou_anchor_idxs):
-        label_head = target_labels[:val]
-        label_mid = tf.constant(i, dtype=tf.int64)
-        label_tail = target_labels[val+1:]
-        target_labels = tf.concat([label_head, label_mid, label_tail])
+    for i in range(n_objs):
+        val = max_iou_anchor_idxs[i] # which anchor
+        # fot labels
+        label_head = target_labels[:val, :]
+        label_mid = tf.reshape(gt_idxs[i], [1, 1])
+        label_tail = target_labels[val+1:, :]
+        target_labels = tf.concat([label_head, label_mid, label_tail], axis=0)
 
-        bbox_head = target_bboxes[:val]
-        bbox_mid = gt_bboxes[i, :]
-        bbox_tail = target_bboxes[val+1:]
-        target_bboxes = tf.concat([bbox_head, bbox_mid, bbox_tail])
+        # for bboxes
+        bbox_head = target_bboxes[:val, :]
+        bbox_mid = tf.expand_dims(gt_bboxes[i], 0)
+        bbox_tail = target_bboxes[val+1:, :]
+        target_bboxes = tf.concat([bbox_head, bbox_mid, bbox_tail], axis=0)
 
     # up to now, all anchors should have a label and a target bbox
+
+    print(target_labels)
+    print(target_bboxes)
+    print(anchor_bboxes)
 
     # turn the coords to center-size form
     anchor_bboxes = bc2cc(anchor_bboxes)
@@ -196,10 +203,23 @@ def match(anchor_bboxes, gts):
 
     offsets = cal_offset(anchor_bboxes, target_bboxes)
 
+    print(offsets)
+
     # now we have tow tensors, target_labels and offsets, 
     # the order is the same as the corresponding anchors'
 
-    targets = tf.concat([target_labels, offsets], axis=0)
+    # one hot 
+    target_labels = tf.one_hot(
+        tf.squeeze(target_labels), 
+        depth=(num_classes_without_bgd+1), 
+        axis=-1,
+        dtype=tf.float32)   
+
+    print(target_labels)
+
+    targets = tf.concat([target_labels, offsets], axis=-1)
+
+    print(targets)
     
     return targets
 
