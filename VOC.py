@@ -124,7 +124,7 @@ def match(anchor_bboxes, gts):
     '''map anchors to gts
     args:
         anchor_bbox
-            a list of tf.constant, as defined in the SSDAnchorGenerator
+            tf.constant, as defined in the SSDAnchorGenerator, with shape [n_anchors, 4]
         gts
             a dict, as defined in the decode function
     returns:
@@ -142,34 +142,27 @@ def match(anchor_bboxes, gts):
     gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1) # [n_objs, 4] -> [n_objs, n_anchors, 4]
     anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 0), n_objs, 0) # [n_anchors, 4] -> [n_objs, n_anchors, 4]
 
-    ious = cal_iou(anchor_bboxes, gt_bboxes)
-
+    ious = cal_iou(anchor_bboxes, gt_bboxes) # [n_objs, n_anchors, 1]
 
     # two rules to do the match depending on ious
     # 1. anchor-wise 2. gt-wise
-
-    labels = []
-    target_bboxes = []
     
-    # anchor-wise
-    max_iou_gt_idxs = tf.math.argmax(ious, axis=-1)
-    target_labels = tf.gather(gt_labels, max_iou_gt_idxs)
-    target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs)
+    labels = tf.zeros(n_anchors, 1)
+    target_bboxes = tf.zeros(n_anchors, 4)
 
-    # up to now, all anchors should have a label and a target bbox
+    # anchor-wise
+    max_iou_gt_idxs = tf.math.argmax(ious, axis=0)
+    target_labels = tf.gather(gt_labels, max_iou_gt_idxs)
+    zero_mask = tf.zeros_like(target_labels)
+    target_labels = tf.where(ious[max_iou_gt_idxs] <= 0.5, y=zero_mask)
+    target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs)
     
     # gt-wise
-    max_iou_anchor_idxs = tf.math.argmax(ious, axis=0)
-    target_labels = tf.gather(gt_labels, max_iou_gt_idxs)
-    target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs)
+    max_iou_anchor_idxs = tf.math.argmax(ious, axis=1)
+    target_labels[max_iou_anchor_idxs] = gt_labels
+    target_bboxes[max_iou_anchor_idxs] = gt_bboxes
 
-    for i, gt in enumerate(gts):
-        max_iou_anchor_idx = np.argmax(ious[:, i])
-        if max_iou_anchor_idx <= 0.5:
-            continue
-        labels[max_iou_anchor_idx] = gt['label']
-        target_bboxes[max_iou_anchor_idx] = gt['bbox']
-    target_bboxes = np.array(target_bboxes)
+    # up to now, all anchors should have a label and a target bbox
 
     # turn the coords to center-size form
     anchor_bboxes = bc2cc(anchor_bboxes)
