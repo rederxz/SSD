@@ -75,27 +75,27 @@ def bc2cc(bc):
     
     return tf.stack([x_c, y_c, w, h], -1)
 
-def cal_iou(bboxes_a, bboxes_b):
+def cal_iou(d_bboxes, g_bboxes):
     '''calculate iou betwwen two groups of bboxes
     args:
-        bboxes_a
+        d_bboxes
             a numpy array of bbox coords (with boundary coords)
-        bboxes_b
+        g_bboxes
             a numpy array of bbox coords (with boundary coords)
-        the two array should have the same shape (None, 4)
+        the two array should have the shape (None, 4), but unnessasary the same
     returns:
-        a numpy array of shape (None, 1)
+        a numpy array of shape (n_objs, n_anchors, 1)
     '''
 
-    max_min = tf.min(bboxes_a[:, 2:], bboxes_b[:, 2:])
-    min_max = tf.max(bboxes_a[:, :2], bboxes_b[:, :2])
+    max_min = tf.math.minimum(g_bboxes[:, :, 2:], d_bboxes[:, :, 2:])
+    min_max = tf.math.maximum(g_bboxes[:, :, :2], d_bboxes[:, :, :2])
 
     mul = (max_min - min_max)
     mul = mul * (mul > 0)
-    inter = mul[:, 0] * mul[:, 1]
+    inter = mul[:, :, 0] * mul[:, :, 1]
 
-    union = (bboxes_a[:, 2] - bboxes_a[:, 0]) * (bboxes_a[:, 3] - bboxes_a[:, 1]) + \
-            (bboxes_b[:, 2] - bboxes_b[:, 0]) * (bboxes_b[:, 3] - bboxes_b[:, 1]) - inter
+    union = (g_bboxes[:, :, 2] - g_bboxes[:, :, 0]) * (g_bboxes[:, :, 3] - g_bboxes[:, :, 1]) + \
+            (d_bboxes[:, :, 2] - d_bboxes[:, :, 0]) * (d_bboxes[:, :, 3] - d_bboxes[:, :, 1]) - inter
 
     iou = inter / union
     
@@ -136,16 +136,14 @@ def match(anchor_bboxes, gts):
     gt_bboxes = gts['bbox']
     gt_labels = gts['label']
 
-    ious = []
-    num_of_anchors = anchor_bboxes.shape[0]
+    # broadcast to [n_objs, n_anchors, 4]
+    n_objs = gt_bboxes.shape[0]
+    n_anchors = anchor_bboxes.shape[0]
+    gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1) # [n_objs, 4] -> [n_objs, n_anchors, 4]
+    anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 0), n_objs, 0) # [n_anchors, 4] -> [n_objs, n_anchors, 4]
 
-    # TODO: tile and reshape
-    for gt_bbox in gt_bboxes:
-        repeated_gt_bbox = np.tile(gt_bbox, (num_of_anchors, 1))
-        cur_ious = cal_iou(repeated_gt_bbox, anchor_bboxes)
-        ious.append(cur_ious)
-    
-    ious = tf.stack(ious, -1)
+    ious = cal_iou(anchor_bboxes, gt_bboxes)
+
 
     # two rules to do the match depending on ious
     # 1. anchor-wise 2. gt-wise
@@ -246,7 +244,7 @@ class SSDAnchorGenerator:
             for j in range(size[0]): # size is in the order of (H, W), height direction
                 for i in range(size[1]): # size is in the order of (H, W), width direction
                     c_x_y = [(i + 0.5) / size[1], (j + 0.5) / size[0]] 
-                    anchors.append(tf.constant(c_x_y + list(w_h))) # [x_c, y_c, w, h]
+                    anchors.append(c_x_y + list(w_h)) # [x_c, y_c, w, h]
         return anchors
 
     def make_anchors_for_multi_fm(self):
@@ -264,5 +262,7 @@ class SSDAnchorGenerator:
         for i in range(len(self.fm_scales)):
             extra_scale = math.sqrt(scales[i] * scales[i+1]) # the extra scale for each stage of feature map
             anchors += self.make_anchors_for_one_fm(self.fm_sizes[i], self.fm_scales[i], extra_scale, self.fm_subset[i])
+
+        anchors = tf.constant(anchors)
 
         return anchors
