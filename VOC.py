@@ -1,6 +1,6 @@
 import tensorflow_datasets as tfds
 import tensorflow as tf
-import numpy as np
+# import numpy as np
 import math
 
 
@@ -19,7 +19,7 @@ def load_voc_dataset(sub=True):
 '''TODO:
     add data augmentation
 '''
-def prepare():
+def prepare(ds):
     '''decode elems in the original dataset and do match
     args:
         the original dataset
@@ -27,6 +27,18 @@ def prepare():
         a new dataset, each elem is a pair of image and targets
     '''
     
+    # decode each elem to (image, gts) pair
+    ds = ds.map(lambda elem: decode(elem),
+                num_parallel_calls=tf.data.AUTOTUNE)
+
+    anchor_gen = SSDAnchorGenerator()
+    anchor_bboxes = anchor_gen.make_anchors_for_multi_fm()
+
+    # decode (image, gts) pair to (image, targets)
+    ds = ds.map(lambda image, gts : (image, match(anchor_bboxes, gts)),
+                num_parallel_calls=tf.data.AUTOTUNE)
+
+    return ds
 
 
 '''TODO:
@@ -50,8 +62,8 @@ def decode(elem):
     '''
     image = elem['image']
     gts = {
-        'bbox': elem['object']['bbox'],
-        'label': elem['object']['label']
+        'bbox': elem['objects']['bbox'],
+        'label': elem['objects']['label']
     }
 
     return image, gts
@@ -91,7 +103,8 @@ def cal_iou(d_bboxes, g_bboxes):
     min_max = tf.math.maximum(g_bboxes[:, :, :2], d_bboxes[:, :, :2])
 
     mul = (max_min - min_max)
-    mul = mul * (mul > 0)
+    mul = mul * tf.where(mul > 0, x=tf.ones_like(mul, dtype=tf.float32),
+                    y=tf.zeros_like(mul, dtype=tf.float32))
     inter = mul[:, :, 0] * mul[:, :, 1]
 
     union = (g_bboxes[:, :, 2] - g_bboxes[:, :, 0]) * (g_bboxes[:, :, 3] - g_bboxes[:, :, 1]) + \
@@ -134,33 +147,46 @@ def match(anchor_bboxes, gts):
             target['offset'] is [g_c_x, g_c_y, g_w, g_h]
     '''
     gt_bboxes = gts['bbox']
+    # print(gt_bboxes)
     gt_labels = gts['label']
+    # print(gt_labels)
+    # print(anchor_bboxes)
 
     # broadcast to [n_objs, n_anchors, 4]
-    n_objs = gt_bboxes.shape[0]
-    n_anchors = anchor_bboxes.shape[0]
-    gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1) # [n_objs, 4] -> [n_objs, n_anchors, 4]
-    anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 0), n_objs, 0) # [n_anchors, 4] -> [n_objs, n_anchors, 4]
+    n_anchors = tf.shape(anchor_bboxes)[0]
+    enlarged_gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1) # [n_objs, 4] -> [n_objs, n_anchors, 4]
 
-    ious = cal_iou(anchor_bboxes, gt_bboxes) # [n_objs, n_anchors, 1]
+    # enlarged_anchor_bboxes = tf.ones_like(enlarged_gt_bboxes)
+    n_objs = tf.shape(gt_bboxes)[0]
+    enlarged_anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 1), n_objs, 0) # [n_anchors, 4] -> [n_objs, n_anchors, 4]
+
+    ious = cal_iou(enlarged_anchor_bboxes, enlarged_gt_bboxes) # [n_objs, n_anchors, 1]
 
     # two rules to do the match depending on ious
     # 1. anchor-wise 2. gt-wise
     
-    labels = tf.zeros(n_anchors, 1)
+    target_labels = tf.zeros(n_anchors, 1) * 20 # the 21th class is background
     target_bboxes = tf.zeros(n_anchors, 4)
 
     # anchor-wise
     max_iou_gt_idxs = tf.math.argmax(ious, axis=0)
+    max_iou_gt = tf.math.reduce_max(ious, axis=0)
     target_labels = tf.gather(gt_labels, max_iou_gt_idxs)
-    zero_mask = tf.zeros_like(target_labels)
-    target_labels = tf.where(ious[max_iou_gt_idxs] <= 0.5, y=zero_mask)
+    target_labels = tf.where(max_iou_gt > 0.5, x=target_labels, y=tf.ones_like(target_labels) * 20)
     target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs)
     
     # gt-wise
     max_iou_anchor_idxs = tf.math.argmax(ious, axis=1)
-    target_labels[max_iou_anchor_idxs] = gt_labels
-    target_bboxes[max_iou_anchor_idxs] = gt_bboxes
+    for i, val in enumerate(max_iou_anchor_idxs):
+        label_head = target_labels[:val]
+        label_mid = tf.constant(i, dtype=tf.int64)
+        label_tail = target_labels[val+1:]
+        target_labels = tf.concat([label_head, label_mid, label_tail])
+
+        bbox_head = target_bboxes[:val]
+        bbox_mid = gt_bboxes[i, :]
+        bbox_tail = target_bboxes[val+1:]
+        target_bboxes = tf.concat([bbox_head, bbox_mid, bbox_tail])
 
     # up to now, all anchors should have a label and a target bbox
 
@@ -170,17 +196,10 @@ def match(anchor_bboxes, gts):
 
     offsets = cal_offset(anchor_bboxes, target_bboxes)
 
-    # now we have tow lists, labels and offsets, 
+    # now we have tow tensors, target_labels and offsets, 
     # the order is the same as the corresponding anchors'
 
-    targets = []
-    for label, offset in zip(labels, offsets):
-        targets.append(
-            {
-                'label':label,
-                'offset':offset
-            }
-        )
+    targets = tf.concat([target_labels, offsets], axis=0)
     
     return targets
 
