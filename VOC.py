@@ -122,8 +122,8 @@ def cal_offset(d_bboxes, g_bboxes):
         a numpy array of shape (None, 4)
     '''
 
-    c_x_offsets = (g_bboxes[:, 0] - d_bboxes[:, 0]) / d_bboxes[:, 0]
-    c_y_offsets = (g_bboxes[:, 1] - d_bboxes[:, 1]) / d_bboxes[:, 1]
+    c_x_offsets = (g_bboxes[:, 0] - d_bboxes[:, 0]) / d_bboxes[:, 2]
+    c_y_offsets = (g_bboxes[:, 1] - d_bboxes[:, 1]) / d_bboxes[:, 3]
     w_offsets = tf.math.log(g_bboxes[:, 2] / d_bboxes[:, 2])
     h_offsets = tf.math.log(g_bboxes[:, 3] / d_bboxes[:, 3])
 
@@ -210,7 +210,7 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
 
     targets = tf.concat([target_labels, offsets], axis=-1)
 
-    return targets
+    return gt_bboxes, targets
 
 '''TODO:
     1. make sure the order of each anchor whether correspond
