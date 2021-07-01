@@ -1,87 +1,6 @@
-from re import I
 import tensorflow_datasets as tfds
 import tensorflow as tf
-# import numpy as np
-import math
-
-
-"""TODO:
-    1. make sure the order of each anchor whether correspond
-    to the order of flattened feature map, for func
-        make_anchors_for_one_fm
-        make_anchors_for_multi_fm
-    2. for SSDAnchorGenerator, in case we want to change the default
-    settings
-"""
-
-
-class SSDAnchorGenerator:
-    """generate anchors defined in SSD"""
-
-    def __init__(self, default=True):
-        if default:
-            # for each feature map
-            self.fm_scales = [0.1, 0.2, 0.375, 0.55, 0.725, 0.9]
-            self.fm_sizes = [(38, 38), (19, 19), (10, 10), (5, 5), (3, 3), (1, 1)]
-            self.fm_subset = [True, False, False, False, True, True]
-
-            # for each tile in a feature map
-            self.bbox_aspects = [1., 2., 0.5, 3., 1. / 3.]
-        else:
-            pass
-
-    def make_anchors_for_one_fm(self, size, scale, extra_scale, subset):
-        """make anchors for a particular feature map
-        args:
-            size
-                tuple (H, W), hight and width of the feature map
-            scale
-                float, the scale of each anchor, the area in the image is scale * scale
-            extra_scale
-                float, the extra scale for each anchor with aspect == 1:1
-            subset
-                bool, whether to use the simple aspects
-        returns:
-            a list of tf.constant
-                each elem is the coords of the anchor,  anchors are
-                in the order of different setting, width, height
-        """
-        anchors = []
-
-        # width and height wrt each aspect
-        aspects = self.bbox_aspects[:3] if subset else self.bbox_aspects
-        w = [scale * math.sqrt(a) for a in aspects] + [extra_scale]
-        h = [scale / math.sqrt(a) for a in aspects] + [extra_scale]
-        w_h_pairs = zip(w, h)
-
-        # the order matters, 'i' and 'j' (tiles in the feature map) must be iterated after the aspects,
-        # to ensure that neighbour anchors have the same aspect
-        for w_h in w_h_pairs:
-            for j in range(size[0]):  # size is in the order of (H, W), height direction
-                for i in range(size[1]):  # size is in the order of (H, W), width direction
-                    c_x_y = [(i + 0.5) / size[1], (j + 0.5) / size[0]]
-                    anchors.append(c_x_y + list(w_h))  # [x_c, y_c, w, h]
-        return anchors
-
-    def make_anchors_for_multi_fm(self):
-        """make anchors for multiple feature maps in different stages
-        returns:
-            a list of dict
-                each dict['bbox'] is the coords of the anchor, in the order of different stage, setting,
-                width, height
-        """
-        anchors = []
-
-        # add 1.0 in the end to calculate extra scales
-        scales = self.fm_scales + [1.0]
-
-        for i in range(len(self.fm_scales)):
-            extra_scale = math.sqrt(scales[i] * scales[i + 1])  # the extra scale for each stage of feature map
-            anchors += self.make_anchors_for_one_fm(self.fm_sizes[i], self.fm_scales[i], extra_scale, self.fm_subset[i])
-
-        anchors = tf.constant(anchors)
-
-        return anchors
+from SSDAnchor import SSDAnchorGenerator
 
 
 def load_voc_dataset(sub=True):
@@ -169,7 +88,7 @@ def bc2cc(bc):
 
 
 def cal_iou(d_bboxes, g_bboxes):
-    """calculate iou betwwen two groups of bboxes
+    """calculate iou between two groups of bboxes
     args:
         d_bboxes
             a numpy array of bbox coords (with boundary coords)
@@ -225,9 +144,8 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
             a dict, as defined in the decode function
     returns:
         targets
-            a list of target,  for each target
-            target['label'] is the target class
-            target['offset'] is [g_c_x, g_c_y, g_w, g_h]
+            [:21] the class label
+            [21:] the offsets
     """
     gt_bboxes = gts['bbox']
     gt_labels = gts['label']
@@ -237,8 +155,7 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     enlarged_gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1)  # [n_objs, 4] -> [n_objs, n_anchors, 4]
 
     n_objs = tf.shape(gt_bboxes)[0]
-    enlarged_anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 0), n_objs,
-                                       0)  # [n_anchors, 4] -> [n_objs, n_anchors, 4]
+    enlarged_anchor_bboxes = tf.repeat(tf.expand_dims(anchor_bboxes, 0), n_objs, 0)  # [n_anchors, 4] -> [n_objs, n_anchors, 4]
 
     ious = cal_iou(enlarged_anchor_bboxes, enlarged_gt_bboxes)  # [n_objs, n_anchors, 1]
 
@@ -249,9 +166,9 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     max_iou_gt_idxs = tf.math.argmax(ious, axis=0)
     max_iou_gt = tf.math.reduce_max(ious, axis=0)
     target_labels = tf.gather(gt_labels, max_iou_gt_idxs, axis=0)
-    target_labels = tf.expand_dims(tf.where(max_iou_gt > 0.5,
-                                            x=target_labels, y=tf.ones_like(target_labels) * num_classes_without_bgd),
-                                   -1)
+    target_labels = tf.expand_dims(
+        tf.where(max_iou_gt > 0.5, x=target_labels, y=tf.ones_like(target_labels) * num_classes_without_bgd),  # class=21 (background) by default
+        -1)
     target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs, axis=0)
 
     anchor_wise_match_results = target_bboxes
@@ -303,4 +220,6 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
 
     targets = tf.concat([target_labels, offsets], axis=-1)
 
-    return gt_bboxes, anchor_wise_match_results, gt_wise_match_results, offsets, target_bboxes, targets
+    # return gt_bboxes, anchor_wise_match_results, gt_wise_match_results, offsets, target_bboxes, targets
+
+    return targets

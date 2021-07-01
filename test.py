@@ -64,12 +64,13 @@ if __name__ == '__main__':
         # [1][2] gtwise match result
 
         # test reverse transform
-        bboxes = debgd_and_do_offset(example[1][-1].numpy(), anchors)
-        draw_img_with_bbox(ax[i], example[0], cc2bc(bboxes))
+        # bboxes = debgd_and_do_offset(example[1][-1].numpy(), anchors)
+        # draw_img_with_bbox(ax[i], example[0], cc2bc(bboxes))
 
         # test anchors
         # print('anchors center-sized')
         # print(anchors)
+        draw_img_with_bbox(ax[i], example[0], cc2bc(anchors[:20]))
 
         # test target coords
         # draw_img_with_bbox(ax[i], example[0], cc2bc(example[1][-2][7000:7020]))# test_targets
@@ -82,8 +83,8 @@ if __name__ == '__main__':
         # draw_img_with_bbox(ax[i], example[0], example[1][0])
 
         # test offsets
-        print('offsets')
-        print(example[1][-3])
+        # print('offsets')
+        # print(example[1][-3])
 
 
     plt.show()
