@@ -3,6 +3,9 @@ import tensorflow as tf
 from SSDAnchor import SSDAnchorGenerator
 
 
+# TODO: correct the order of height and width
+
+
 def load_voc_dataset(sub=True):
     if sub:
         ds_train = tfds.load('voc/2007', split='train+validation', shuffle_files=True)
@@ -16,18 +19,15 @@ def load_voc_dataset(sub=True):
     return ds_train, ds_val
 
 
-'''TODO:
-    add data augmentation
-'''
-
-
-def prepare(ds):
+def prepare(ds, batch_size, training=False):
     """decode elems in the original dataset and do match
     args:
         the original dataset
     returns:
         a new dataset, each elem is a pair of image and targets
     """
+
+    # TODO: data augmentation and shuffle
 
     # decode each elem to (image, gts) pair
     ds = ds.map(lambda elem: decode(elem),
@@ -36,11 +36,17 @@ def prepare(ds):
     anchor_gen = SSDAnchorGenerator()
     anchor_bboxes = anchor_gen.make_anchors_for_multi_fm()  # center-sized format
 
-    # decode (image, gts) pair to (image, targets)
+    # data augmentation should be here
+    if training:
+        pass
+
+    # transform (image, gts) pair to (image, targets)
     ds = ds.map(lambda image, gts: (image, match(cc2bc(anchor_bboxes), gts)),  # convert to boundary coords
                 num_parallel_calls=tf.data.AUTOTUNE)
 
-    print(ds)
+    # shuffle
+    ds = ds.batch(batch_size)
+
 
     return ds
 
