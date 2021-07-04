@@ -1,6 +1,6 @@
 import tensorflow_datasets as tfds
 import tensorflow as tf
-from SSDAnchor import SSDAnchorGenerator
+from anchor import SSDAnchorGenerator
 
 
 # TODO: correct the order of height and width

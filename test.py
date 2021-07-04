@@ -1,4 +1,4 @@
-from VOC import load_voc_dataset, SSDAnchorGenerator, prepare, cc2bc
+from voc import load_voc_dataset, SSDAnchorGenerator, prepare, cc2bc
 from matplotlib import pyplot as plt
 from matplotlib import patches
 import numpy as np

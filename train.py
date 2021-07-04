@@ -1,10 +1,10 @@
-from VOC import load_voc_dataset, prepare
-from Model import  SSD300
-from SSDLoss import SSDLoss
+from voc import load_voc_dataset, prepare
+from model import  SSD300
+from loss import SSDLoss
 from tensorflow.keras.optimizers import SGD
 
 
-BATCH_SIZE=32
+BATCH_SIZE = 32
 
 
 ds_train, ds_test = load_voc_dataset()
