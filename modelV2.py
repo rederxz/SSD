@@ -138,6 +138,6 @@ class SSD(Model):
         fms = self.aux_conv(fm7)
         loc_output, cls_output = self.pred_conv([fm4_3, fm7]+fms)
         return {
-            'output_offsets': loc_output,
-            'output_classes': cls_output
+            'offsets': loc_output,
+            'classes': cls_output
         }
