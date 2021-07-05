@@ -76,20 +76,20 @@ def decode(elem):
 
 def cc2bc(cc):
     """convert a group of center-size coords to boundary coords"""
-    x_min = cc[:, 1] - cc[:, 3] / 2.
-    x_max = x_min + cc[:, 3]
     y_min = cc[:, 0] - cc[:, 2] / 2.
     y_max = y_min + cc[:, 2]
+    x_min = cc[:, 1] - cc[:, 3] / 2.
+    x_max = x_min + cc[:, 3]
 
     return tf.stack([y_min, x_min, y_max, x_max], -1)
 
 
 def bc2cc(bc):
     """convert a group of boundary coords to center-size coords"""
-    x_c = (bc[:, 3] + bc[:, 1]) / 2.
     y_c = (bc[:, 2] + bc[:, 0]) / 2.
-    w = bc[:, 3] - bc[:, 1]
+    x_c = (bc[:, 3] + bc[:, 1]) / 2.
     h = bc[:, 2] - bc[:, 0]
+    w = bc[:, 3] - bc[:, 1]
 
     return tf.stack([y_c, x_c, h, w], -1)
 
@@ -134,10 +134,10 @@ def cal_offset(d_bboxes, g_bboxes):
         a numpy array of shape (None, 4)
     """
 
-    c_x_offsets = (g_bboxes[:, 1] - d_bboxes[:, 1]) / d_bboxes[:, 3]
     c_y_offsets = (g_bboxes[:, 0] - d_bboxes[:, 0]) / d_bboxes[:, 2]
-    w_offsets = tf.math.log(g_bboxes[:, 3] / d_bboxes[:, 3])
+    c_x_offsets = (g_bboxes[:, 1] - d_bboxes[:, 1]) / d_bboxes[:, 3]
     h_offsets = tf.math.log(g_bboxes[:, 2] / d_bboxes[:, 2])
+    w_offsets = tf.math.log(g_bboxes[:, 3] / d_bboxes[:, 3])
 
     return tf.stack([c_y_offsets, c_x_offsets, h_offsets, w_offsets], -1)
 
