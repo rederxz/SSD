@@ -19,7 +19,7 @@ def load_voc_dataset(sub=True):
     return ds_train, ds_val
 
 
-def prepare(ds, batch_size, training=False):
+def prepare(ds, batch_size=0, training=False):
     """decode elems in the original dataset and do match
     args:
         the original dataset
@@ -27,25 +27,26 @@ def prepare(ds, batch_size, training=False):
         a new dataset, each elem is a pair of image and targets
     """
 
-    # TODO: data augmentation and shuffle
-
     # decode each elem to (image, gts) pair
-    ds = ds.map(lambda elem: decode(elem),
-                num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.map(lambda elem: decode(elem))
 
     anchor_gen = SSDAnchorGenerator()
     anchor_bboxes = anchor_gen.make_anchors_for_multi_fm()  # center-sized format
 
     # data augmentation should be here
     if training:
+        # TODO: data augmentation
         pass
 
     # transform (image, gts) pair to (image, targets)
-    ds = ds.map(lambda image, gts: (image, match(cc2bc(anchor_bboxes), gts)),  # convert to boundary coords
-                num_parallel_calls=tf.data.AUTOTUNE)
+    ds = ds.map(lambda image, gts: (image, match(cc2bc(anchor_bboxes), gts)))  # convert to boundary coords
 
     # shuffle
-    ds = ds.batch(batch_size)
+    # TODO
+
+    # batch
+    if batch_size:
+        ds = ds.batch(batch_size)
 
 
     return ds
@@ -75,22 +76,22 @@ def decode(elem):
 
 def cc2bc(cc):
     """convert a group of center-size coords to boundary coords"""
-    x_min = cc[:, 0] - cc[:, 2] / 2.
-    x_max = x_min + cc[:, 2]
-    y_min = cc[:, 1] - cc[:, 3] / 2.
-    y_max = y_min + cc[:, 3]
+    x_min = cc[:, 1] - cc[:, 3] / 2.
+    x_max = x_min + cc[:, 3]
+    y_min = cc[:, 0] - cc[:, 2] / 2.
+    y_max = y_min + cc[:, 2]
 
-    return tf.stack([x_min, y_min, x_max, y_max], -1)
+    return tf.stack([y_min, x_min, y_max, x_max], -1)
 
 
 def bc2cc(bc):
     """convert a group of boundary coords to center-size coords"""
-    x_c = (bc[:, 2] + bc[:, 0]) / 2.
-    y_c = (bc[:, 3] + bc[:, 1]) / 2.
-    w = bc[:, 2] - bc[:, 0]
-    h = bc[:, 3] - bc[:, 1]
+    x_c = (bc[:, 3] + bc[:, 1]) / 2.
+    y_c = (bc[:, 2] + bc[:, 0]) / 2.
+    w = bc[:, 3] - bc[:, 1]
+    h = bc[:, 2] - bc[:, 0]
 
-    return tf.stack([x_c, y_c, w, h], -1)
+    return tf.stack([y_c, x_c, h, w], -1)
 
 
 def cal_iou(d_bboxes, g_bboxes):
@@ -133,12 +134,12 @@ def cal_offset(d_bboxes, g_bboxes):
         a numpy array of shape (None, 4)
     """
 
-    c_x_offsets = (g_bboxes[:, 0] - d_bboxes[:, 0]) / d_bboxes[:, 2]
-    c_y_offsets = (g_bboxes[:, 1] - d_bboxes[:, 1]) / d_bboxes[:, 3]
-    w_offsets = tf.math.log(g_bboxes[:, 2] / d_bboxes[:, 2])
-    h_offsets = tf.math.log(g_bboxes[:, 3] / d_bboxes[:, 3])
+    c_x_offsets = (g_bboxes[:, 1] - d_bboxes[:, 1]) / d_bboxes[:, 3]
+    c_y_offsets = (g_bboxes[:, 0] - d_bboxes[:, 0]) / d_bboxes[:, 2]
+    w_offsets = tf.math.log(g_bboxes[:, 3] / d_bboxes[:, 3])
+    h_offsets = tf.math.log(g_bboxes[:, 2] / d_bboxes[:, 2])
 
-    return tf.stack([c_x_offsets, c_y_offsets, w_offsets, h_offsets], -1)
+    return tf.stack([c_y_offsets, c_x_offsets, h_offsets, w_offsets], -1)
 
 
 def match(anchor_bboxes, gts, num_classes_without_bgd=20):
@@ -147,7 +148,7 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         anchor_bbox
             tf.constant, should be boundary coords, with shape [n_anchors, 4]
         gts
-            a dict, as defined in the decode function
+            a dict, as defined in the decode function (with boundary coords)
     returns:
         targets
             [:21] the class label
@@ -177,8 +178,6 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         -1)
     target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs, axis=0)
 
-    anchor_wise_match_results = target_bboxes
-
     # gt-wise
     gt_idxs = tf.range(0, n_objs, 1, dtype=tf.int64)
 
@@ -204,8 +203,6 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         bbox_tail = target_bboxes[val + 1:, :]
         target_bboxes = tf.concat([bbox_head, bbox_mid, bbox_tail], axis=0)
 
-    gt_wise_match_results = target_bboxes
-
     # up to now, all anchors should have a label and a target bbox
 
     # turn the coords to center-size form
@@ -224,8 +221,4 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         axis=-1,
         dtype=tf.float32)
 
-    targets = tf.concat([target_labels, offsets], axis=-1)
-
-    # return gt_bboxes, anchor_wise_match_results, gt_wise_match_results, offsets, target_bboxes, targets
-
-    return targets
+    return {'target_offsets': offsets, 'target_classes': target_labels}

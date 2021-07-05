@@ -4,18 +4,18 @@ from matplotlib import patches
 import numpy as np
 
 
-def debgd_and_do_offset(bboxes, anchor_bboxes):
+def debgd_and_do_offset(offsets, classes, anchor_bboxes):
     # do offsets
-    offsets = bboxes[:, -4:]
-    bboxes[:, -4] = offsets[:, 0] * anchor_bboxes[:, 2] + anchor_bboxes[:, 0]
-    bboxes[:, -3] = offsets[:, 1] * anchor_bboxes[:, 3] + anchor_bboxes[:, 1]
-    bboxes[:, -2] = np.exp(offsets[:, 2]) * anchor_bboxes[:, 2]
-    bboxes[:, -1] = np.exp(offsets[:, 3]) * anchor_bboxes[:, 3]
+    bboxes = np.zeros_like(offsets)
+    bboxes[:, 0] = offsets[:, 0] * anchor_bboxes[:, 2] + anchor_bboxes[:, 0]
+    bboxes[:, 1] = offsets[:, 1] * anchor_bboxes[:, 3] + anchor_bboxes[:, 1]
+    bboxes[:, 2] = np.exp(offsets[:, 2]) * anchor_bboxes[:, 2]
+    bboxes[:, 3] = np.exp(offsets[:, 3]) * anchor_bboxes[:, 3]
 
     # exclude background class
     target_bboxes = []
-    for bbox in bboxes:
-        if bbox[20] == 1:  # class == background
+    for bbox, cls in zip(bboxes, classes):
+        if cls[20] == 1:  # class == background
             continue
         target_bboxes.append(bbox[-4:])
 
@@ -58,36 +58,26 @@ if __name__ == '__main__':
 
     fig, ax = plt.subplots(1, n_show)
     for i, example in enumerate(ds_train.take(n_show)):
-        # [1][-2] target_bboxes
-        # [1][-3] offsets
-        # [1][1] anchorwise match result
-        # [1][2] gtwise match result
 
         # test reverse transform
-        # bboxes = debgd_and_do_offset(example[1][-1].numpy(), anchors)
-        # draw_img_with_bbox(ax[i], example[0], cc2bc(bboxes))
+        bboxes = debgd_and_do_offset(example[1]['target_offsets'].numpy(),
+                                     example[1]['target_classes'].numpy(),
+                                     anchors)
+        draw_img_with_bbox(ax[i], example[0], cc2bc(bboxes))
 
         # test anchors
         # print('anchors center-sized')
         # print(anchors)
-        draw_img_with_bbox(ax[i], example[0], cc2bc(anchors[:20]))
+        # draw_img_with_bbox(ax[i], example[0], cc2bc(anchors[:20]))
 
-        # test target coords
-        # draw_img_with_bbox(ax[i], example[0], cc2bc(example[1][-2][7000:7020]))# test_targets
-        # print('before convert')
-        # print(example[1][2])
-        # print('target coords after convert')
-        # print(example[1][-2])
+        # test gt bbox
+        # draw_img_with_bbox(ax[i], example['image'], example['objects']['bbox'])
 
-        # test gt_bboxes
-        # draw_img_with_bbox(ax[i], example[0], example[1][0])
-
-        # test offsets
-        # print('offsets')
-        # print(example[1][-3])
-
+        # print the bbox
+        # print(example['objects']['bbox'])
 
     plt.show()
 
-    # for example in ds_train.take(5):
-    #     print(example)
+
+
+
