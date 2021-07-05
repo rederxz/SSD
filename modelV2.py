@@ -95,7 +95,7 @@ class SSDAuxConv(Layer):
 
 class SSDPredConv(Layer):
 
-    def __init__(self, priors_per_tile, fm_size, **kwargs):
+    def __init__(self, priors_per_tile, fm_size):
         super(SSDPredConv, self).__init__()
         self.priors_per_tile = priors_per_tile
         self.fm_size = fm_size
@@ -141,12 +141,3 @@ class SSD(Model):
             'output_offsets': loc_output,
             'output_classes': cls_output
         }
-
-model = SSD()
-model.build((None, 300, 300, 3))
-
-model.summary()
-
-# model = VGG_backbone()
-#
-# model.summary()
