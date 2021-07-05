@@ -221,4 +221,4 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         axis=-1,
         dtype=tf.float32)
 
-    return {'target_offsets': offsets, 'target_classes': target_labels}
+    return {'offsets': offsets, 'classes': target_labels}
