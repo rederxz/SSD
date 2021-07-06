@@ -16,6 +16,7 @@ class VGG_backbone_raw:
         # build the model
         _input = Input(shape=(image_res, image_res, 3))
         fm4_3, x = self.normal_layers(_input)
+        fm4_3 = tf.math.l2_normalize(fm4_3, -1)  # l2 normalize to match the scale
         fm7 = self.fc_layers(x)
         self.model = Model(_input, [fm4_3, fm7])
 
