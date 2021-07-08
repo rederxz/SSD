@@ -26,7 +26,6 @@ class VGG_backbone_raw:
         assert(self.model.layers[5].weights == self.vgg_layers[5].weights)
 
     def normal_layers(self, x):
-
         normal_layers = self.vgg_layers[:-4]
         normal_layers[10] = MaxPool2D((2, 2), (2, 2), 'same')
         normal_layers[18] = MaxPool2D((3, 3), (1, 1), 'same')
@@ -42,8 +41,8 @@ class VGG_backbone_raw:
 
     def fc_layers(self, x):
         x = Conv2D(1024, (3, 3), (1, 1), 'same', dilation_rate=(6, 6),
-                   activation='relu')(x)  # decimate (6, 6) since block5_pool does not half fm
-        x = Conv2D(1024, (1, 1), (1, 1), 'same', activation='relu')(x)
+                   activation='relu', name='fc6')(x)  # decimate (6, 6) since block5_pool does not half fm
+        x = Conv2D(1024, (1, 1), (1, 1), 'same', activation='relu', name='fc7')(x)
 
         return x
 
@@ -55,13 +54,13 @@ class VGG_backbone_raw:
         weights = self.vgg_layers[20].get_weights()
         weights[0] = weights[0].reshape([7, 7, 512, 4096])[::3, ::3, :, ::4]  # decimate the weights
         weights[1] = weights[1][::4]
-        model.layers[-2].set_weights(weights)
+        model.get_layer(name='fc6').set_weights(weights)
 
         # fc2 adapted layer
         weights = self.vgg_layers[21].get_weights()
         weights[0] = weights[0].reshape([1, 1, 4096, 4096])[:, :, ::4, ::4]  # decimate the weights
         weights[1] = weights[1][::4]
-        model.layers[-1].set_weights(weights)
+        model.get_layer(name='fc7').set_weights(weights)
 
 
 def VGG_backbone(image_res=300):
