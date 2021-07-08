@@ -209,7 +209,7 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     anchor_bboxes = bc2cc(anchor_bboxes)
     target_bboxes = bc2cc(target_bboxes)
 
-    offsets = cal_offset(anchor_bboxes, target_bboxes)
+    target_offsets = cal_offset(anchor_bboxes, target_bboxes)
 
     # now we have tow tensors, target_labels and offsets,
     # the order is the same as the corresponding anchors'
@@ -221,4 +221,4 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         axis=-1,
         dtype=tf.float32)
 
-    return {'offsets': offsets, 'classes': target_labels}
+    return {'offsets': target_offsets, 'classes': target_labels, 'objects': gts}

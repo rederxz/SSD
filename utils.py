@@ -2,7 +2,9 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 
-def nms(bboxes, scores, iou_threshold=0.5, score_threshold=0.02, max_per_class=200):
+# TODO: figure out whether 'max' indicates max per class or max per pic
+
+def nms(bboxes, scores, iou_threshold=0.45, score_threshold=0.01, top_k=200, max_per_class=200):
     """do non-maximum suppression with given iou_limit and score_limit
     args:
         bboxes: anchor bboxes from an image, in boundary size form
@@ -13,7 +15,7 @@ def nms(bboxes, scores, iou_threshold=0.5, score_threshold=0.02, max_per_class=2
         labels: tensor with shape (#objs, #classes)
         scores: tensor with shape (#objs, )
         bboxes: tensor with shape (#objs, 4), boundary coords
-        n_vals: scaler, number of valid objects in the image
+        n_valid: scalar, number of valid objects in the image
     """
     # exclude bboxes with too low score
     max_scores = tf.reduce_max(scores, axis=-1)
@@ -27,24 +29,30 @@ def nms(bboxes, scores, iou_threshold=0.5, score_threshold=0.02, max_per_class=2
     all_labels = []
     all_scores = []
     all_bboxes = []
-    all_n_valids = []
+    all_n_valid = []
     for _class in range(n_classes):
         scores_wrt_class = scores[:, _class]
-        idx, scores_cls, n_valids = tf.raw_ops.NonMaxSuppressionV5(
+        idx, scores_cls, n_valid = tf.raw_ops.NonMaxSuppressionV5(
                 boxes=bboxes, scores=scores_wrt_class, max_output_size=max_per_class,
                 iou_threshold=iou_threshold, score_threshold=score_threshold,
                 soft_nms_sigma=0., pad_to_max_output_size=False)
         all_scores.append(scores_cls)
         all_labels.append(tf.ones_like(idx) * _class)
         all_bboxes.append(tf.gather(bboxes, idx))
-        all_n_valids.append(n_valids)
+        all_n_valid.append(n_valid)
 
     all_labels = tf.stack(all_labels, axis=0)
     all_scores = tf.stack(all_scores, axis=0)
     all_bboxes = tf.stack(all_bboxes, axis=0)
-    all_n_valids = tf.reduce_sum(all_n_valids)
+    all_n_valid = tf.reduce_sum(tf.stack(all_n_valid))
 
-    return all_labels, all_scores, all_bboxes, all_n_valids
+    if all_n_valid > top_k:
+        all_scores, idx = tf.math.top_k(all_scores, top_k=top_k, sorted=True)
+        all_labels = tf.gather(all_labels, idx)
+        all_bboxes = tf.gather(all_bboxes, idx)
+        all_n_valid = top_k
+
+    return all_labels, all_scores, all_bboxes, all_n_valid
 
 
 def batched_nms(bboxes, scores, iou_limit=0.5, score_limit=0.02):
@@ -52,7 +60,7 @@ def batched_nms(bboxes, scores, iou_limit=0.5, score_limit=0.02):
     output = []
     for i in range(batch_size):
         output.append(nms(bboxes[i], scores[i], iou_limit, score_limit))
-    return [tf.stack(_) for _ in zip(*output)]  # [labels, scores, bboxes, n_valids]
+    return [tf.stack(_) for _ in zip(*output)]  # [labels, scores, bboxes, n_valid]
 
 
 def do_offsets(offsets, anchor_bboxes):
@@ -77,16 +85,19 @@ def postprocess(outputs, anchors):
         four lists: labels, scores, bboxes, n_valids of each image
     """
 
-    bboxes = do_offsets(outputs['output_offsets'], anchors)
-    labels, scores, bboxes, n_valids = batched_nms(bboxes, outputs['output_classes'])
+    bboxes = do_offsets(outputs['offsets'], anchors)
+    labels, scores, bboxes, n_valid = batched_nms(bboxes, outputs['classes'])
 
     return {
         'labels': labels,
         'scores': scores,
         'bboxes': bboxes,
-        'n_valids': n_valids
+        'n_valid': n_valid
     }
 
 
-def cal_mAP():
+def mAP(targets, outputs):
+    """we need to consider that: mAP needs the entire valuation dataset, but the evaluation is performed batch by batch,
+    how to update the
+    """
     raise NotImplementedError
