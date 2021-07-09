@@ -45,10 +45,10 @@ optimizer = SGD(learning_rate=lr_schedule, momentum=0.9)
 metrics = [SSDLoss, ]
 
 if TEST:
-    with setup_tpu().scope():
-        model = SSD_test()
-        # model.build((None, 300, 300, 3))
-        model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
+    # with setup_tpu().scope():
+    #     model = SSD_test()
+    #     model.build((None, 300, 300, 3))
+    #     model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
 else:
     with setup_tpu().scope():
         model = SSD()
