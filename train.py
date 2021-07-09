@@ -34,4 +34,4 @@ metrics = [SSDLoss, ]
 model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
 
 # train
-model.fit(ds_train=ds_train, ds_test=ds_test, epochs=EPOCH)
+model.fit(ds_train, validation_data=ds_test, epochs=EPOCH)
