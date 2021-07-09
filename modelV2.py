@@ -121,10 +121,12 @@ class SSDPredConv(Layer):
 
 class SSD(Model):
     def __init__(self,
-                 backbone=VGG_backbone(300),
+                 backbone=None,
                  priors_per_tile=None,
                  fm_size=None):
         super(SSD, self).__init__()
+        if backbone is None:
+            backbone = VGG_backbone(300)
         if priors_per_tile is None:
             priors_per_tile = [4, 6, 6, 6, 4, 4]
         if fm_size is None:
