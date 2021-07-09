@@ -26,6 +26,10 @@ def setup_tpu():
         return strategy
 
 
+def setup_gpu():
+    return tf.distribute.MirroredStrategy()
+
+
 TEST = True
 
 BATCH_SIZE = 32
@@ -45,13 +49,13 @@ optimizer = SGD(learning_rate=lr_schedule, momentum=0.9)
 metrics = [SSDLoss(alpha=1.), ]
 
 if TEST:
-    # with setup_tpu().scope():
+    # with setup_gpu().scope():
     #     model = SSD_test()
     #     model.build((None, 300, 300, 3))
     #     model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
     pass
 else:
-    with setup_tpu().scope():
+    with setup_gpu().scope():
         model = SSD()
         model.build((None, 300, 300, 3))
         model.compile(loss=SSDLoss(alpha=1.), optimizer=optimizer, metrics=metrics)
