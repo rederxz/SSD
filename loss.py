@@ -20,7 +20,13 @@ class SSDLoss:
 
     def __call__(self, targets, outputs):
         print(outputs)
-        positive_anchor_idxes = tf.where(targets['classes'][:, -1] != 1)  # positive (or matched) anchors
+        target_cls = targets['classes']
+        target_offset = targets['offsets']
+
+        output_cls = outputs['classes']
+        output_offset = outputs['offsets']
+
+        positive_anchor_idxes = tf.where(target_cls[:, -1] != 1)  # positive (or matched) anchors
         num_positive_anchors = tf.shape(positive_anchor_idxes)[0]
 
         if num_positive_anchors == 0:  # if N == 0, Loss=0
@@ -28,21 +34,21 @@ class SSDLoss:
 
         # classification loss
         # positive
-        positive_outputs_cls = outputs['classes'][positive_anchor_idxes]
-        positive_targets_cls = targets['classes'][positive_anchor_idxes]
+        positive_outputs_cls = output_cls[positive_anchor_idxes]
+        positive_targets_cls = target_cls[positive_anchor_idxes]
         positive_loss_cls = -1 * tf.reduce_sum(tf.math.log(positive_outputs_cls * positive_targets_cls))
 
         # negative
-        negative_anchor_idxes = tf.where(targets['classes'][:, -1] == 1)
-        negative_outputs_cls = outputs['classes'][negative_anchor_idxes]
+        negative_anchor_idxes = tf.where(target_cls[:, -1] == 1)
+        negative_outputs_cls = output_cls[negative_anchor_idxes]
         hard_negative_loss_cls = hard_negative_mining(negative_outputs_cls,
                                                       3*num_positive_anchors)  # positive : negative >= 1 :  3
 
         loss_cls = positive_loss_cls + hard_negative_loss_cls
 
         # location loss
-        outputs_loc = outputs['offsets'][positive_anchor_idxes]
-        targets_loc = targets['offsets'][positive_anchor_idxes]
+        outputs_loc = output_offset[positive_anchor_idxes]
+        targets_loc = target_offset[positive_anchor_idxes]
         loss_loc = huber()(targets_loc, outputs_loc)
 
         loss = (loss_cls + self.alpha * loss_loc) / num_positive_anchors
