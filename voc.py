@@ -19,7 +19,7 @@ def load_voc_dataset(sub=True):
     return ds_train, ds_val
 
 
-def prepare(ds, batch_size=0, training=False):
+def prepare(ds, batch_size=32, training=False):
     """decode elems in the original dataset and do match
     args:
         the original dataset
@@ -45,9 +45,7 @@ def prepare(ds, batch_size=0, training=False):
     # TODO
 
     # batch
-    if batch_size:
-        ds = ds.batch(batch_size)
-
+    ds = ds.batch(batch_size, drop_remainder=True)
 
     return ds
 
