@@ -49,6 +49,7 @@ if TEST:
     #     model = SSD_test()
     #     model.build((None, 300, 300, 3))
     #     model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
+    pass
 else:
     with setup_tpu().scope():
         model = SSD()
