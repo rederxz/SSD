@@ -8,13 +8,13 @@ from tensorflow.keras.applications import VGG16
 # TODO: Add layer-wise learning rates
 
 
-class SSD(Model):
+class SSD_test(Model):
     def __init__(self):
         super(Model, self).__init__()
 
     def call(self, x, **kwargs):
         batch_size = tf.shape(x)[0]
         return {
-            'offsets': tf.ones((batch_size, 8732, 4)),
-            'classes': tf.ones((batch_size, 8732, 21))
+            'offsets': tf.ones((batch_size, 8732, 4)) * x[0, 0, 0, 0],
+            'classes': tf.ones((batch_size, 8732, 21) * x[0, 0, 0, 0])
         }

@@ -6,6 +6,7 @@ from tensorflow.keras.optimizers import SGD
 
 from voc import load_voc_dataset, prepare
 from modelV2 import SSD
+from model_test import SSD_test
 from loss import SSDLoss
 
 
@@ -24,7 +25,8 @@ def setup_tpu():
         strategy = tf.distribute.TPUStrategy(tpu)
         return strategy
 
-strategy = setup_tpu()
+
+TEST = True
 
 BATCH_SIZE = 32
 EPOCH = 232  # iterations per epoch = 5011 / BATCH_SIZE
@@ -42,10 +44,16 @@ optimizer = SGD(learning_rate=lr_schedule, momentum=0.9)
 # metrics = [SSDLoss, mAP]
 metrics = [SSDLoss, ]
 
-with strategy.scope():
-    model = SSD()
-    model.build((None, 300, 300, 3))
-    model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
+if TEST:
+    with setup_tpu().scope():
+        model = SSD_test()
+        # model.build((None, 300, 300, 3))
+        model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
+else:
+    with setup_tpu().scope():
+        model = SSD()
+        model.build((None, 300, 300, 3))
+        model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
 
 # train
 model.fit(ds_train, validation_data=ds_test, epochs=EPOCH)
