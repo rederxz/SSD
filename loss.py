@@ -19,6 +19,7 @@ class SSDLoss:
         self.alpha = alpha
 
     def __call__(self, targets, outputs):
+        print(outputs)
         positive_anchor_idxes = tf.where(targets['classes'][:, -1] != 1)  # positive (or matched) anchors
         num_positive_anchors = tf.shape(positive_anchor_idxes)[0]
 
