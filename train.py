@@ -46,7 +46,7 @@ lr_schedule = PiecewiseConstantDecay(boundaries, values)
 optimizer = SGD(learning_rate=lr_schedule, momentum=0.9)
 
 # metrics = [SSDLoss, mAP]
-metrics = [SSDLoss(alpha=1.), ]
+# metrics = [SSDLoss(alpha=1.), ]
 
 if TEST:
     # with setup_gpu().scope():
@@ -58,7 +58,7 @@ else:
     with setup_gpu().scope():
         model = SSD()
         model.build((None, 300, 300, 3))
-        model.compile(loss=SSDLoss(alpha=1.), optimizer=optimizer, metrics=metrics)
+        model.compile(loss=SSDLoss(alpha=1.), optimizer=optimizer)
 
 # train
 model.fit(ds_train, validation_data=ds_test, epochs=EPOCH)
