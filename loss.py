@@ -18,13 +18,13 @@ class SSDLoss:
     def __init__(self, alpha=1.):
         self.alpha = alpha
 
-    def __call__(self, targets, outputs):
-        print(outputs)
-        target_cls = targets['classes']
-        target_offset = targets['offsets']
+    def __call__(self, y_true, y_pred):
+        print(y_pred)
+        target_cls = y_true['classes']
+        target_offset = y_true['offsets']
 
-        output_cls = outputs['classes']
-        output_offset = outputs['offsets']
+        output_cls = y_pred['classes']
+        output_offset = y_pred['offsets']
 
         positive_anchor_idxes = tf.where(target_cls[:, -1] != 1)  # positive (or matched) anchors
         num_positive_anchors = tf.shape(positive_anchor_idxes)[0]
