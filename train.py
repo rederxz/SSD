@@ -10,6 +10,7 @@ from model_test import SSD_test
 from loss import SSDLoss
 
 
+# TODO: implement a trainer to replace keras' model.fit
 # TODO: add lr schedule
 # TODO: add mAP
 
@@ -48,17 +49,10 @@ optimizer = SGD(learning_rate=lr_schedule, momentum=0.9)
 # metrics = [SSDLoss, mAP]
 # metrics = [SSDLoss(alpha=1.), ]
 
-if TEST:
-    # with setup_gpu().scope():
-    #     model = SSD_test()
-    #     model.build((None, 300, 300, 3))
-    #     model.compile(loss=SSDLoss, optimizer=optimizer, metrics=metrics)
-    pass
-else:
-    with setup_gpu().scope():
-        model = SSD()
-        model.build((None, 300, 300, 3))
-        model.compile(loss=SSDLoss(alpha=1.), optimizer=optimizer)
+with setup_gpu().scope():
+    model = SSD()
+    model.build((None, 300, 300, 3))
+    model.compile(loss=SSDLoss(alpha=1.), optimizer=optimizer)
 
 # train
 model.fit(ds_train, validation_data=ds_test, epochs=EPOCH)

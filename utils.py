@@ -2,8 +2,6 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 
-# TODO: figure out whether 'max' indicates max per class or max per pic
-
 def nms(bboxes, scores, iou_threshold=0.45, score_threshold=0.01, top_k=200, max_per_class=200):
     """do non-maximum suppression with given iou_limit and score_limit
     args:

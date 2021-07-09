@@ -3,9 +3,6 @@ import tensorflow as tf
 from anchor import SSDAnchorGenerator
 
 
-# TODO: correct the order of height and width
-
-
 def load_voc_dataset(sub=True):
     if sub:
         ds_train = tfds.load('voc/2007', split='train+validation', shuffle_files=True)
@@ -39,7 +36,7 @@ def prepare(ds, batch_size=32, training=False):
         pass
 
     # transform (image, gts) pair to (image, targets)
-    ds = ds.map(lambda image, gts: (image, {**match(cc2bc(anchor_bboxes), gts), 'gt': gts}))  # convert to boundary coords
+    ds = ds.map(lambda image, gts: (image, match(cc2bc(anchor_bboxes), gts)))  # convert to boundary coords
 
     # shuffle
     # TODO

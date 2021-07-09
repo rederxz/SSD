@@ -7,7 +7,6 @@ from tensorflow.keras.applications import VGG16
 # TODO: Add weight decay
 # TODO: Add layer-wise learning rates
 
-
 class VGG_backbone_raw:
     def __init__(self, image_res=300):
         # pretrained layers
