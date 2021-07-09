@@ -39,7 +39,7 @@ def prepare(ds, batch_size=0, training=False):
         pass
 
     # transform (image, gts) pair to (image, targets)
-    ds = ds.map(lambda image, gts: (image, {**match(cc2bc(anchor_bboxes)), 'gt':gts}))  # convert to boundary coords
+    ds = ds.map(lambda image, gts: (image, {**match(cc2bc(anchor_bboxes), gts), 'gt': gts}))  # convert to boundary coords
 
     # shuffle
     # TODO
