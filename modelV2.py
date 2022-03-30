@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras import Model, Sequential
 from tensorflow.keras.layers import Input, Conv2D, MaxPool2D, Layer
 from tensorflow.keras.applications import VGG16
 
@@ -120,12 +120,15 @@ class SSDPredConv(Layer):
 
 class SSD(Model):
     def __init__(self,
+                 img_size=None,
                  backbone=None,
                  priors_per_tile=None,
                  fm_size=None):
         super(SSD, self).__init__()
+        if img_size is None:
+            img_size = 300
         if backbone is None:
-            backbone = VGG_backbone(300)
+            backbone = VGG_backbone(img_size)
         if priors_per_tile is None:
             priors_per_tile = [4, 6, 6, 6, 4, 4]
         if fm_size is None:
@@ -134,11 +137,14 @@ class SSD(Model):
         self.aux_conv = SSDAuxConv()
         self.pred_conv = SSDPredConv(priors_per_tile, fm_size)
 
-    def call(self, x, **kwargs):
+    def call(self, x):
         fm4_3, fm7 = self.base_conv(x)
         fms = self.aux_conv(fm7)
         loc_output, cls_output = self.pred_conv([fm4_3, fm7]+fms)
-        return {
-            'offsets': loc_output,
-            'classes': cls_output
-        }
+        return {'box_p': loc_output, 'cls_p': cls_output}
+
+
+if __name__ == "__main__":
+    model = SSD()
+    model.build((None, 300, 300, 3))
+    model.summary()

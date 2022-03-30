@@ -6,7 +6,6 @@ from tensorflow.keras.optimizers import SGD
 
 from voc import load_voc_dataset, prepare
 from modelV2 import SSD
-from model_test import SSD_test
 from loss import SSDLoss
 
 

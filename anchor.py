@@ -58,7 +58,7 @@ class SSDAnchorGenerator:
             [y_0, x_n, h_3, w_3],
             ...
 
-            then start the next horizontal line
+            then start the next horizontal line (with a different vertical position)
 
             the position of (y_1, x_0)
             [y_1, x_0, h_0, w_0],
@@ -69,6 +69,9 @@ class SSDAnchorGenerator:
 
             ...
         ]
+        As a result, boxes in the same position with different ratios assembles together,
+        then the horizontal position changes, then the vertical position ...
+
         args:
             size
                 tuple (H, W), hight and width of the feature map

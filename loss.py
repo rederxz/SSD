@@ -16,21 +16,25 @@ class SSDLoss:
     """
 
     def __init__(self, alpha=1.):
+        self.__name__ = 'SSDLoss'
         self.alpha = alpha
 
     def __call__(self, y_true, y_pred):
-        print(y_pred)
-        target_cls = y_true['classes']
-        target_offset = y_true['offsets']
+        print('y_true')
+        print(y_true)
+        target_cls = y_true[0]
+        target_offset = y_true[1]
 
-        output_cls = y_pred['classes']
-        output_offset = y_pred['offsets']
+        print('y_pred')
+        print(y_pred)
+        output_cls = y_pred[0]
+        output_offset = y_pred[1]
 
         positive_anchor_idxes = tf.where(target_cls[:, -1] != 1)  # positive (or matched) anchors
         num_positive_anchors = tf.shape(positive_anchor_idxes)[0]
 
         if num_positive_anchors == 0:  # if N == 0, Loss=0
-            return 0
+            return 0.
 
         # classification loss
         # positive

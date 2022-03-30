@@ -16,7 +16,7 @@ def load_voc_dataset(sub=True):
     return ds_train, ds_val
 
 
-def prepare(ds, batch_size=32, training=False):
+def prepare(ds, res=300, batch_size=32, training=False):
     """decode elems in the original dataset and do match
     args:
         the original dataset
@@ -25,7 +25,7 @@ def prepare(ds, batch_size=32, training=False):
     """
 
     # decode each elem to (image, gts) pair
-    ds = ds.map(lambda elem: decode(elem))
+    ds = ds.map(lambda elem: decode(elem, res))
 
     anchor_gen = SSDAnchorGenerator()
     anchor_bboxes = anchor_gen.make_anchors_for_multi_fm()  # center-sized format
@@ -36,18 +36,18 @@ def prepare(ds, batch_size=32, training=False):
         pass
 
     # transform (image, gts) pair to (image, targets)
-    ds = ds.map(lambda image, gts: (image, match(cc2bc(anchor_bboxes), gts)))  # convert to boundary coords
+    ds = ds.map(lambda image, gts: (image, (*match(cc2bc(anchor_bboxes), gts), gts)))
 
     # shuffle
-    # TODO
+    ds = ds.shuffle(buffer_size=len(ds))
 
     # batch
-    ds = ds.batch(batch_size, drop_remainder=True)
+    ds = ds.padded_batch(batch_size, padding_values=(0., (0., 0., {'bbox': 0., 'label': 20.})), drop_remainder=True)
 
     return ds
 
 
-def decode(elem):
+def decode(elem, res=300):
     """ to decode an element from voc dataset provided by tfds
     args:
         elem
@@ -57,13 +57,13 @@ def decode(elem):
             tf.Tensor, the image of the elem
         gt
             a dict, gt['label'] == the label of objects,
-            gt['bbox'] == the bouding box of objects, in the
+            gt['bbox'] == the bounding box of objects, in the
             format of center-size coords
     """
-    image = elem['image']
+    image = tf.image.resize(elem['image'], (res, res))
     gts = {
         'bbox': elem['objects']['bbox'],
-        'label': elem['objects']['label']
+        'label': tf.cast(elem['objects']['label'], dtype=tf.float32)
     }
 
     return image, gts
@@ -153,7 +153,7 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
     gt_labels = gts['label']
 
     # broadcast to [n_objs, n_anchors, 4]
-    n_anchors = tf.shape(anchor_bboxes)[0]
+    n_anchors = anchor_bboxes.shape[0]
     enlarged_gt_bboxes = tf.repeat(tf.expand_dims(gt_bboxes, 1), n_anchors, 1)  # [n_objs, 4] -> [n_objs, n_anchors, 4]
 
     n_objs = tf.shape(gt_bboxes)[0]
@@ -173,17 +173,15 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         -1)
     target_bboxes = tf.gather(gt_bboxes, max_iou_gt_idxs, axis=0)
 
+    # print(target_bboxes.shape)
+
+    print(target_labels.shape[0])
+
     # gt-wise
-    gt_idxs = tf.range(0, n_objs, 1, dtype=tf.int64)
+    gt_idxs = tf.range(0, n_objs, 1, dtype=tf.float32)
 
     max_iou_anchor_idxs = tf.math.argmax(ious, axis=1)
     for i in tf.range(n_objs):
-        tf.autograph.experimental.set_loop_options(  # otherwise error raised
-            shape_invariants=[
-                (target_bboxes, tf.TensorShape([None, 4])),
-                (target_labels, tf.TensorShape([None, 1]))
-            ]
-        )
 
         val = max_iou_anchor_idxs[i]  # which anchor
         # for labels
@@ -191,12 +189,14 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
         label_mid = tf.reshape(gt_idxs[i], [1, 1])
         label_tail = target_labels[val + 1:, :]
         target_labels = tf.concat([label_head, label_mid, label_tail], axis=0)
+        target_labels = tf.reshape(target_labels, (n_anchors, 1))
 
         # for bboxes
         bbox_head = target_bboxes[:val, :]
         bbox_mid = tf.reshape(gt_bboxes[i], [1, 4])
         bbox_tail = target_bboxes[val + 1:, :]
         target_bboxes = tf.concat([bbox_head, bbox_mid, bbox_tail], axis=0)
+        target_bboxes = tf.reshape(target_bboxes, (n_anchors, 4))
 
     # up to now, all anchors should have a label and a target bbox
 
@@ -206,14 +206,16 @@ def match(anchor_bboxes, gts, num_classes_without_bgd=20):
 
     target_offsets = cal_offset(anchor_bboxes, target_bboxes)
 
-    # now we have tow tensors, target_labels and offsets,
+    # now we have two tensors, target_labels and offsets,
     # the order is the same as the corresponding anchors'
 
     # one hot coding
     target_labels = tf.one_hot(
-        tf.squeeze(target_labels),
+        tf.cast(tf.squeeze(target_labels), dtype=tf.int32),
         depth=(num_classes_without_bgd + 1),
         axis=-1,
         dtype=tf.float32)
 
-    return {'offsets': target_offsets, 'classes': target_labels, 'objects': gts}
+    print(target_labels.shape)
+
+    return target_labels, target_offsets
