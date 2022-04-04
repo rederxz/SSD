@@ -5,13 +5,8 @@ from tensorflow.keras.optimizers.schedules import PiecewiseConstantDecay
 from tensorflow.keras.optimizers import SGD
 
 from voc import load_voc_dataset, prepare
-from modelV2 import SSD
+from modelV4 import SSD
 from loss import SSDLoss
-
-
-# TODO: implement a trainer to replace keras' model.fit
-# TODO: add lr schedule
-# TODO: add mAP
 
 
 def setup_tpu():
@@ -30,8 +25,6 @@ def setup_gpu():
     return tf.distribute.MirroredStrategy()
 
 
-TEST = True
-
 BATCH_SIZE = 32
 EPOCH = 232  # iterations per epoch = 5011 / BATCH_SIZE
 
@@ -44,9 +37,6 @@ boundaries = [154, 193]
 values = [1e-3, 1e-4, 1e-5]
 lr_schedule = PiecewiseConstantDecay(boundaries, values)
 optimizer = SGD(learning_rate=lr_schedule, momentum=0.9)
-
-# metrics = [SSDLoss, mAP]
-# metrics = [SSDLoss(alpha=1.), ]
 
 with setup_gpu().scope():
     model = SSD()
